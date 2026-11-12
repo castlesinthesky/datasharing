@@ -63,7 +63,7 @@ section .desc{color:var(--ink-2);margin:0 0 12px;font-size:13px;max-width:90ch}
 .card .meta{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
 .card .def{color:var(--ink-3);font-size:12px;margin:2px 0 6px}
 .conf{font:500 10.5px/1 var(--font-ui);text-transform:uppercase;letter-spacing:.06em;border-radius:999px;padding:3px 7px;border:1px solid var(--rule);color:var(--ink-2);white-space:nowrap}
-.conf.high{color:var(--good);background:var(--good-bg)} .conf.moderate{color:var(--warn);background:var(--warn-bg)} .conf.low{color:var(--bad);background:var(--bad-bg)} .conf.derived,.conf.imported{color:var(--accent);background:var(--accent-soft)}
+.conf.high{color:var(--good);background:var(--good-bg)} .conf.moderate{color:var(--warn);background:var(--warn-bg)} .conf.low{color:var(--bad);background:var(--bad-bg)} .conf.osfi{color:var(--good);background:var(--good-bg)} .conf.unverified{color:var(--bad);background:var(--bad-bg)} .conf.derived,.conf.imported{color:var(--accent);background:var(--accent-soft)}
 .kpi{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 4px;font-size:12px;color:var(--ink-2)}
 .kpi b{font:500 15px/1 var(--font-num);color:var(--ink)}
 .chart{width:100%;height:220px;display:block;touch-action:pan-y}
@@ -99,7 +99,7 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
 
 <header class="top wrap">
   <h1>Big Six CAMELS Monitor</h1>
-  <p class="sub">Annual fiscal-year-end (Oct 31) metrics for RBC, TD, Scotiabank, BMO, CIBC and National Bank, FY2009 to FY2025. Switch between the peer group and a single bank, and hover any chart to read values.</p>
+  <p class="sub">Annual fiscal-year-end (Oct 31) metrics for RBC, TD, Scotiabank, BMO, CIBC and National Bank, FY2009 onward, built from OSFI regulatory filings. Switch between the peer group and a single bank, and hover any chart to read values.</p>
 </header>
 
 <div class="bar">
@@ -116,7 +116,7 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
 </div>
 
 <main class="wrap">
-  <div class="note"><b>Data provenance.</b> The built-in figures are compiled from memory of the banks' annual reports and supplementary financial information packages, not pulled from a live feed. Each chart carries a confidence badge. Treat <i>moderate</i> as roughly ±0.3pp on ratios and ±5bps on PCL, and <i>low</i> as directional only. Paste verified figures in <a href="#data">Data &amp; import</a> and they override the built-in values everywhere.</div>
+  <div class="note" id="srcNote"><b>Source.</b> Every series badged <i>OSFI filing</i> is calculated from the banks' regulatory returns to OSFI (BCAR capital, leverage, P3 income statement, E3 impaired loans, M4 monthly balance sheet), published on the Government of Canada Open Government Portal. Figures are on OSFI's reporting basis: reported rather than adjusted, with insurance subsidiaries treated as OSFI requires, so they will not tie exactly to each bank's headline numbers. The LCR series is the one exception: it is not in OSFI's open data and is still from memory, badged <i>unverified</i>. Raw line items behind every ratio are in <code>data/osfi_inputs.csv</code>.</div>
 
   <section id="scorecard">
     <h2>Scorecard <span class="desc" id="scoreSub" style="margin:0"></span></h2>
@@ -137,7 +137,7 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
       </div>
       <div class="card">
         <h3>Export</h3>
-        <p class="def">Every value currently in the dashboard, built-in and imported, in the same CSV layout. Copy it into Excel, correct it against SFI packages, and paste it back.</p>
+        <p class="def">Every value currently in the dashboard, OSFI and imported, in the same CSV layout.</p>
         <textarea id="csvOut" spellcheck="false" readonly></textarea>
         <div class="row"><button class="btn" id="btnCopy">Copy CSV</button><span class="msg" id="cpMsg"></span></div>
       </div>
@@ -145,21 +145,21 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
     <div class="card" style="margin-top:14px">
       <h3>Definitions and regime breaks</h3>
       <ul class="src">
-        <li><b>CET1</b> is shown on the Basel III "all-in" basis from FY2013, when OSFI adopted it. Basel II Tier 1 common ratios for 2009 to 2012 are not comparable and are left blank. Basel III reforms (CAR 2023) took effect in Q2 FY2023, and the output floor phase-in is paused at 67.5%.</li>
-        <li><b>Leverage ratio</b> is Basel III, disclosed from Q1 FY2015. FY2020 and FY2021 are inflated by OSFI's temporary exclusion of central-bank reserves and sovereign securities.</li>
-        <li><b>PCL ratio</b> is total PCL over average net loans and acceptances, in bps. It covers impaired loans only through FY2017; from FY2018 (IFRS 9) it includes performing-loan provisions. BMO FY2023 and NA FY2025 include initial provisions on acquired portfolios (Bank of the West, CWB).</li>
-        <li><b>Efficiency ratio and ROE</b> are each bank's adjusted figures, so definitions differ. BMO's efficiency ratio is net of insurance claims (CCPB) where the bank reported it that way. TD FY2024 reported ROE was hit by the AML provisions; the adjusted figure is shown.</li>
-        <li><b>LCR</b> is the Q4 average, disclosed from FY2015.</li>
-        <li><b>Sensitivity</b> metrics are derived inside the dashboard from the ROE and PCL series, so they inherit those series' confidence.</li>
+        <li><b>Build.</b> <code>python3 scripts/build_osfi_data.py</code> downloads the five OSFI files (about 1.2 GB, cached in <code>.cache/osfi</code>) and rewrites <code>data/camels_data.js</code>, <code>data/osfi_camels.csv</code> and <code>data/osfi_inputs.csv</code>. Use <code>--refresh</code> after each OSFI release.</li>
+        <li><b>Fiscal year.</b> Income items are Q4 year-to-date. Ratios on averages use 13 month-ends (October to October) from the monthly balance sheet.</li>
+        <li><b>Capital.</b> CET1 from FY2014. OSFI's open data carries only a transitional figure for FY2013, so it is left blank. Tier 1 uses Basel II for FY2009-12. Basel III reforms took effect in Q2 FY2023.</li>
+        <li><b>IFRS transitions.</b> FY2012 (IFRS adoption) brought securitized mortgages onto the balance sheet, which lifts loans/deposits and lowers liquidity ratios. FY2018 (IFRS 9) moved impaired loans to stage 3 and added performing-loan provisions to PCL.</li>
+        <li><b>Known distortions.</b> TD FY2023-24 (FHN termination, AML charges) and FY2025 (gain on the Schwab stake sale), BMO FY2022-23 (Bank of the West hedge gains, then losses), NA from FY2018 (Credigy purchased credit-impaired loans in stage 3) and NA from FY2023 (funding costs of trading positions in NII).</li>
+        <li><b>Sensitivity</b> metrics are derived inside the dashboard from the ROE and PCL series.</li>
       </ul>
     </div>
   </section>
 </main>
 <div class="tip" id="tip" role="status"></div>
 
+<script src="data/camels_data.js"></script>
 <script>
 (function(){
-const YEARS=[];for(let y=2009;y<=2025;y++)YEARS.push(y);
 const N=null;
 const BANKS=[
  {id:'RY',name:'Royal Bank of Canada',short:'RBC',slot:1},
@@ -170,51 +170,33 @@ const BANKS=[
  {id:'NA',name:'National Bank of Canada',short:'National',slot:6}];
 const pre=(n,a)=>Array(n).fill(N).concat(a);
 
-/* Built-in dataset: 17 values per bank, FY2009..FY2025 */
-const BASE={
- cet1:{L:'C',label:'CET1 ratio',unit:'%',dec:1,hib:true,conf:'moderate',def:'Common Equity Tier 1 / RWA, Basel III all-in, fiscal year-end',floor:{v:11.5,t:'OSFI floor 11.5% (incl. DSB 3.5%)'},
-  d:{RY:pre(4,[9.6,9.9,10.6,10.8,10.9,11.5,12.1,12.5,13.7,13.7,14.5,13.2,13.5]),
-     TD:pre(4,[9.0,9.4,9.9,10.4,10.7,12.0,12.1,13.1,15.2,16.2,14.4,13.1,14.7]),
-     BNS:pre(4,[9.1,10.8,11.5,11.0,11.5,11.1,11.1,11.8,12.3,11.5,13.0,13.1,13.2]),
-     BMO:pre(4,[9.9,10.1,10.7,10.1,11.4,11.3,11.4,11.9,13.7,16.7,12.5,13.6,13.3]),
-     CM:pre(4,[9.4,10.3,10.8,11.3,10.6,11.4,11.6,12.1,12.4,11.7,12.4,13.3,13.4]),
-     NA:pre(4,[9.2,9.2,9.9,10.1,11.2,11.7,11.7,11.8,12.4,12.7,13.5,13.7,13.5])}},
- lev:{L:'C',label:'Leverage ratio',unit:'%',dec:1,hib:true,conf:'low',def:'Tier 1 capital / leverage exposure, Basel III',floor:{v:3.5,t:'D-SIB minimum 3.5%'},
-  d:{RY:pre(6,[4.3,4.4,4.4,4.4,4.3,4.8,4.9,4.4,4.2,4.2,4.4]),
-     TD:pre(6,[3.7,4.0,3.9,4.2,4.0,4.5,4.8,4.9,4.4,4.2,4.6]),
-     BNS:pre(6,[4.2,4.5,4.7,4.5,4.4,4.6,4.8,4.2,4.2,4.4,4.4]),
-     BMO:pre(6,[4.2,4.2,4.4,4.2,4.3,4.8,5.1,5.6,4.2,4.2,4.3]),
-     CM:pre(6,[3.9,4.0,4.0,4.3,4.3,4.7,4.7,4.3,4.2,4.3,4.3]),
-     NA:pre(6,[3.7,3.9,4.0,4.0,4.0,4.4,4.6,4.6,4.4,4.4,4.4])}},
- pcl:{L:'A',label:'PCL ratio',unit:'bps',dec:0,hib:false,conf:'moderate',def:'Total provision for credit losses / average net loans & acceptances',
-  d:{RY:[77,46,40,37,32,25,22,33,23,22,26,62,-11,6,28,35,42],
-     TD:[95,60,51,44,40,35,36,41,39,39,46,100,-3,13,34,45,47],
-     BNS:[70,48,38,37,32,39,42,50,45,51,52,102,29,19,45,53,59],
-     BMO:[88,60,52,30,22,19,19,23,20,17,19,63,0,6,34,55,50],
-     CM:[92,59,34,49,44,34,26,33,22,22,31,59,4,19,37,36,39],
-     NA:[45,20,23,21,19,20,20,39,18,22,22,51,-1,7,18,22,33]}},
- eff:{L:'M',label:'Efficiency ratio',unit:'%',dec:1,hib:false,conf:'low',def:'Adjusted non-interest expense / adjusted revenue',
-  d:{RY:[52.9,55.9,54.4,53.6,52.7,51.7,51.9,52.6,52.6,52.3,53.3,54.1,52.1,54.4,55.6,54.8,53.4],
-     TD:[56.4,55.4,57.6,56.0,55.4,54.9,55.0,54.4,53.6,51.9,52.7,52.6,51.4,51.3,54.8,54.8,54.4],
-     BNS:[53.7,51.8,54.0,52.0,52.6,53.6,53.9,53.5,53.6,52.8,54.5,54.4,53.2,52.4,54.7,56.4,54.9],
-     BMO:[62.0,62.0,61.4,62.2,61.7,61.6,63.9,62.1,61.1,59.9,60.5,58.9,55.9,54.9,57.6,58.6,56.3],
-     CM:[59.4,57.4,57.7,56.0,56.9,55.6,55.4,55.1,55.0,55.6,56.0,56.6,55.6,56.6,56.1,55.1,53.1],
-     NA:[59.5,57.3,57.8,58.1,57.9,58.4,56.4,57.6,55.2,54.2,53.3,53.5,51.6,50.4,52.5,51.0,50.8]}},
- roe:{L:'E',label:'Return on equity',unit:'%',dec:1,hib:true,conf:'moderate',def:'Adjusted net income to common / average common equity',
-  d:{RY:[13.0,14.9,19.6,19.6,19.0,19.6,18.6,17.0,17.1,17.6,16.8,14.2,18.6,16.4,14.8,15.0,16.3],
-     TD:[13.4,14.2,15.9,15.3,15.0,15.4,14.6,14.0,15.3,16.7,15.4,11.4,15.0,15.0,14.0,13.4,13.4],
-     BNS:[16.7,18.3,18.8,19.7,16.6,16.1,14.6,14.6,14.6,14.5,13.1,10.4,14.8,14.8,11.7,11.3,11.8],
-     BMO:[9.9,14.9,15.3,15.0,14.0,13.7,13.0,13.3,13.3,14.9,14.1,10.1,15.0,15.7,12.0,10.2,10.9],
-     CM:[16.9,19.4,22.2,22.6,21.4,20.9,19.3,18.7,18.3,17.0,15.6,13.2,16.6,14.6,13.4,13.4,14.4],
-     NA:[17.2,19.0,19.8,20.8,19.9,18.3,18.3,17.0,17.9,18.4,17.7,14.9,22.1,20.8,16.9,16.9,14.5]}},
- lcr:{L:'L',label:'Liquidity coverage ratio',unit:'%',dec:0,hib:true,conf:'low',def:'HQLA / 30-day stressed net outflows, Q4 average',floor:{v:100,t:'Minimum 100%'},
-  d:{RY:pre(6,[124,127,119,124,123,145,125,125,131,129,128]),
-     TD:pre(6,[125,124,120,127,133,145,124,118,141,138,138]),
-     BNS:pre(6,[124,127,125,124,124,136,123,119,136,129,128]),
-     BMO:pre(6,[129,129,127,134,133,145,128,135,135,129,132]),
-     CM:pre(6,[119,124,127,129,125,145,127,129,136,131,130]),
-     NA:pre(6,[132,145,136,147,146,161,154,140,155,155,140])}}
+/* Metric definitions. Values come from data/camels_data.js, generated by scripts/build_osfi_data.py from OSFI returns. */
+const SRC=window.CAMELS_DATA||null;
+const OSFI='osfi';
+const META={
+ cet1:{L:'C',label:'CET1 ratio',unit:'%',dec:1,hib:true,conf:OSFI,def:'CET1 capital / RWA, Basel III all-in (BCAR line 1000). FY2014 onward.',floor:{v:11.5,t:'OSFI floor 11.5% incl. 3.5% DSB'}},
+ t1:{L:'C',label:'Tier 1 ratio',unit:'%',dec:1,hib:true,conf:OSFI,def:'Basel II for FY2009-12, Basel III all-in from FY2014. FY2013 is blank: OSFI open data only carries a transitional figure.'},
+ lev:{L:'C',label:'Leverage ratio',unit:'%',dec:1,hib:true,conf:OSFI,def:'Tier 1 / leverage exposure (LR return). FY2020-21 inflated by temporary reserve and sovereign exclusions.',floor:{v:3.5,t:'D-SIB minimum 3.5%'}},
+ pcl:{L:'A',label:'PCL ratio',unit:'bps',dec:0,hib:false,conf:OSFI,def:'Total PCL (P3) / 13-month average net loans (M4). Performing-loan provisions included from FY2018 (IFRS 9).'},
+ gil:{L:'A',label:'Gross impaired loans',unit:'bps',dec:0,hib:false,conf:OSFI,def:'Impaired (stage 3 from FY2018) recorded investment / year-end net loans. NA from FY2018 includes Credigy purchased credit-impaired loans.'},
+ cov:{L:'A',label:'Allowance coverage',unit:'%',dec:0,hib:true,conf:OSFI,def:'Total allowance for credit losses / gross impaired loans. NA from FY2018 depressed by POCI loans in stage 3.'},
+ unins:{L:'A',label:'Uninsured residential mortgages',unit:'%',dec:1,hib:false,conf:OSFI,def:'Uninsured residential mortgages / net loans, year-end (M4). A mix measure, not a loss measure.'},
+ eff:{L:'M',label:'Efficiency ratio',unit:'%',dec:1,hib:false,conf:OSFI,def:'Non-interest expense / total revenue, reported regulatory basis. Includes one-offs such as TD FY2024 AML charges.'},
+ roe:{L:'E',label:'Return on equity',unit:'%',dec:1,hib:true,conf:OSFI,def:'Net income to equity holders / 13-month average shareholders\' equity incl. preferred. Reported, not adjusted.'},
+ roa:{L:'E',label:'Return on assets',unit:'bps',dec:0,hib:true,conf:OSFI,def:'Net income to equity holders / 13-month average total assets.'},
+ nim:{L:'E',label:'NII / average assets',unit:'%',dec:2,hib:true,conf:OSFI,def:'Net interest income / average total assets. NA from FY2023 is depressed by trading-related funding costs booked in NII.'},
+ ltd:{L:'L',label:'Loans / deposits',unit:'%',dec:0,hib:false,conf:OSFI,def:'Year-end net loans / deposits (M4). FY2012 step-up is the IFRS move of securitized mortgages on balance sheet.'},
+ liq:{L:'L',label:'Cash & securities / assets',unit:'%',dec:0,hib:true,conf:OSFI,def:'Cash, deposits with banks and all securities / total assets, year-end (M4). Not HQLA.'},
+ lcr:{L:'L',label:'Liquidity coverage ratio',unit:'%',dec:0,hib:true,conf:'unverified',def:'Q4 average LCR. Not in OSFI open data: these values are from memory and unverified until the bank-disclosure layer is built.',floor:{v:100,t:'Minimum 100%'},
+  mem:{RY:[124,127,119,124,123,145,125,125,131,129,128],TD:[125,124,120,127,133,145,124,118,141,138,138],BNS:[124,127,125,124,124,136,123,119,136,129,128],BMO:[129,129,127,134,133,145,128,135,135,129,132],CM:[119,124,127,129,125,145,127,129,136,131,130],NA:[132,145,136,147,146,161,154,140,155,155,140]},memFrom:2015},
+ niish:{L:'S',label:'NII share of revenue',unit:'%',dec:0,hib:null,conf:OSFI,def:'Net interest income / total revenue. Higher means earnings lean harder on rates and spreads. Not ranked: neither direction is better.'}
 };
+const YEARS=SRC?SRC.years.slice():[];
+const BASE={};
+for(const k in META){const m=META[k];
+  if(m.mem){BASE[k]={...m,d:{}};for(const b of ['RY','TD','BNS','BMO','CM','NA']){const a=YEARS.map(()=>null);m.mem[b].forEach((v,i)=>{const j=YEARS.indexOf(m.memFrom+i);if(j>=0)a[j]=v;});BASE[k].d[b]=a;}}
+  else if(SRC&&SRC.metrics[k]){BASE[k]={...m,d:SRC.metrics[k]};}
+}
 const DERIVED={
  roedev:{L:'S',label:'Earnings sensitivity',unit:'pp',dec:1,hib:true,conf:'derived',def:'ROE minus its trailing 5-year average; deep negatives flag earnings that crack under stress',zero:true,
    from:'roe',fn:(a,i)=>{const w=a.slice(Math.max(0,i-5),i).filter(v=>v!=null);return (a[i]==null||w.length<3)?null:a[i]-w.reduce((s,v)=>s+v,0)/w.length;}},
@@ -223,18 +205,19 @@ const DERIVED={
 };
 const LETTERS=[
  ['C','Capital adequacy','Loss-absorbing capital against risk-weighted and total exposure.'],
- ['A','Asset quality','Credit cost through the cycle. PCL is the cleanest cross-bank series; GIL ratios can be added via import.'],
+ ['A','Asset quality','Credit cost, problem loans, reserve coverage and the share of the book in uninsured mortgages.'],
  ['M','Management','Cost discipline as a proxy for management execution. Mix differences (wealth, capital markets, US) drive a lot of the gap.'],
- ['E','Earnings','Profitability on the common equity base.'],
- ['L','Liquidity','Short-term funding resilience under the Basel III 30-day stress.'],
- ['S','Sensitivity','How hard earnings and credit costs move when the cycle turns. Both are derived from the series above.'],
+ ['E','Earnings','Profitability on equity and on the balance sheet, plus spread income relative to assets.'],
+ ['L','Liquidity','Funding structure and liquid-asset cushion. LCR is the regulatory measure but is not yet sourced.'],
+ ['S','Sensitivity','Reliance on spread income, and how hard earnings and credit costs move when the cycle turns. The last two are derived from the ROE and PCL series.'],
  ['X','Imported','Metrics added through CSV import.']];
 const EVENTS=[[2009,'GFC tail'],[2015,'Oil shock'],[2018,'IFRS 9'],[2020,'COVID'],[2022,'Rate hikes'],[2024,'TD AML']];
 
 /* ---------- state ---------- */
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 let imported={};try{imported=JSON.parse(store.get('camels.imported')||'{}')||{}}catch(e){imported={}}
-let S={view:store.get('camels.view')||'GROUP',from:2009,to:2025,score:2025,events:true,hidden:new Set(),hover:null};
+const Y0=YEARS[0]||2009,Y1=YEARS[YEARS.length-1]||2025;
+let S={view:store.get('camels.view')||'GROUP',from:Y0,to:Y1,score:Y1,events:true,hidden:new Set(),hover:null};
 if(S.view!=='GROUP'&&!BANKS.some(b=>b.id===S.view))S.view='GROUP';
 
 function metrics(){
@@ -258,7 +241,7 @@ const col=b=>`var(--s${BANKS.find(x=>x.id===b).slot})`;
 const fmt=(m,v)=>v==null||isNaN(v)?'–':(m.zero&&v>0?'+':'')+v.toFixed(m.dec)+(m.unit==='%'?'%':m.unit?' '+m.unit:'');
 const median=a=>{a=a.filter(v=>v!=null).sort((x,y)=>x-y);if(!a.length)return null;const h=a.length>>1;return a.length%2?a[h]:(a[h-1]+a[h])/2;};
 function peer(m,i,excl){const v=BANKS.filter(b=>b.id!==excl).map(b=>m.d[b.id][i]).filter(v=>v!=null);return {med:median(v),min:v.length?Math.min(...v):null,max:v.length?Math.max(...v):null};}
-function ranks(m,i){const r={};const v=BANKS.map(b=>[b.id,m.d[b.id][i]]).filter(x=>x[1]!=null).sort((a,b)=>m.hib?b[1]-a[1]:a[1]-b[1]);v.forEach((x,j)=>r[x[0]]=[j+1,v.length]);return r;}
+function ranks(m,i){const r={};if(m.hib==null)return r;const v=BANKS.map(b=>[b.id,m.d[b.id][i]]).filter(x=>x[1]!=null).sort((a,b)=>m.hib?b[1]-a[1]:a[1]-b[1]);v.forEach((x,j)=>r[x[0]]=[j+1,v.length]);return r;}
 function niceTicks(lo,hi,n){const span=hi-lo||1;const step0=span/n;const mag=Math.pow(10,Math.floor(Math.log10(step0)));const s=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=step0)||10*mag;const a=Math.floor(lo/s)*s,b=Math.ceil(hi/s)*s;const t=[];for(let v=a;v<=b+1e-9;v+=s)t.push(+v.toFixed(6));return t;}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -268,8 +251,8 @@ function buildControls(){
   seg.innerHTML=`<button data-v="GROUP" aria-pressed="${S.view==='GROUP'}">Peer group</button>`+BANKS.map(b=>`<button data-v="${b.id}" aria-pressed="${S.view===b.id}" title="${b.name}"><span class="sw" style="background:${col(b.id)}"></span>${b.id}</button>`).join('');
   seg.onclick=e=>{const t=e.target.closest('button');if(!t)return;setView(t.dataset.v);};
   for(const [id,val] of [['#yFrom',S.from],['#yTo',S.to],['#yScore',S.score]]){const el=$(id);el.innerHTML=YEARS.map(y=>`<option value="${y}"${y===val?' selected':''}>FY${y}</option>`).join('');}
-  $('#yFrom').onchange=e=>{S.from=+e.target.value;if(S.from>=S.to){S.to=Math.min(2025,S.from+1);$('#yTo').value=S.to;}renderPanels();};
-  $('#yTo').onchange=e=>{S.to=+e.target.value;if(S.to<=S.from){S.from=Math.max(2009,S.to-1);$('#yFrom').value=S.from;}renderPanels();};
+  $('#yFrom').onchange=e=>{S.from=+e.target.value;if(S.from>=S.to){S.to=Math.min(Y1,S.from+1);$('#yTo').value=S.to;}renderPanels();};
+  $('#yTo').onchange=e=>{S.to=+e.target.value;if(S.to<=S.from){S.from=Math.max(Y0,S.to-1);$('#yFrom').value=S.from;}renderPanels();};
   $('#yScore').onchange=e=>{S.score=+e.target.value;renderScore();};
   $('#evToggle').onchange=e=>{S.events=e.target.checked;renderPanels();};
 }
@@ -286,8 +269,8 @@ function renderScore(){
     for(const k of ks){const m=MET[k];const r=ranks(m,i);const p=peer(m,i);
       h+=`<tr><td>${esc(m.label)}</td>`+BANKS.map(b=>{const v=m.d[b.id][i];const rk=r[b.id];const cls=!rk?'':rk[0]===1?'r1':rk[0]===rk[1]?'r6':'rm';
         return `<td class="${b.id===sel?'hl':''}"><span class="v">${fmt(m,v)}</span>${rk?`<span class="rk ${cls}" title="Rank ${rk[0]} of ${rk[1]}">#${rk[0]}</span>`:''}</td>`;}).join('')+`<td><span class="v">${fmt(m,p.med)}</span></td>`;
-      if(sel!=='GROUP'){const v=m.d[sel][i];const dlt=v==null||p.med==null?null:v-p.med;const good=dlt==null?null:(m.hib?dlt>=0:dlt<=0);
-        h+=`<td class="hl"><span class="v" style="color:${dlt==null?'var(--ink-3)':good?'var(--good)':'var(--bad)'}">${dlt==null?'–':(dlt>0?'+':'')+dlt.toFixed(m.dec)+(m.unit==='%'?'pp':' '+m.unit)}</span></td>`;}
+      if(sel!=='GROUP'){const v=m.d[sel][i];const dlt=v==null||p.med==null?null:v-p.med;const good=dlt==null||m.hib==null?null:(m.hib?dlt>=0:dlt<=0);
+        h+=`<td class="hl"><span class="v" style="color:${good==null?'var(--ink-2)':good?'var(--good)':'var(--bad)'}">${dlt==null?'–':(dlt>0?'+':'')+dlt.toFixed(m.dec)+(m.unit==='%'?'pp':' '+m.unit)}</span></td>`;}
       h+='</tr>';}
   }
   $('#scoreTable').innerHTML=h+'</tbody>';
@@ -303,7 +286,7 @@ function renderPanels(){
   for(const [L,name] of LETTERS){
     const ks=Object.keys(MET).filter(k=>MET[k].L===L);
     h+=ks.map(k=>{const m=MET[k];
-      return `<div class="card" data-k="${k}"><div class="meta"><h3><span class="let" title="${name}">${L}</span>${esc(m.label)} <span style="color:var(--ink-3);font-weight:400">(${m.unit||'value'})</span></h3><span class="conf ${m.conf}" title="${m.confNote||''}">${m.conf}${m.confNote?' + import':''}</span></div><div class="def">${esc(m.def)}</div><div class="kpi" id="kpi-${k}"></div><svg class="chart" id="ch-${k}" role="img" aria-label="${esc(m.label)} by year"></svg>${m.floor?`<div class="foot">Dotted red line: ${m.floor.t}</div>`:''}</div>`;}).join('');
+      return `<div class="card" data-k="${k}"><div class="meta"><h3><span class="let" title="${name}">${L}</span>${esc(m.label)} <span style="color:var(--ink-3);font-weight:400">(${m.unit||'value'})</span></h3><span class="conf ${m.conf}" title="${m.confNote||''}">${m.conf==='osfi'?'OSFI filing':m.conf}${m.confNote?' + import':''}</span></div><div class="def">${esc(m.def)}</div><div class="kpi" id="kpi-${k}"></div><svg class="chart" id="ch-${k}" role="img" aria-label="${esc(m.label)} by year"></svg>${m.floor?`<div class="foot">Dotted red line: ${m.floor.t}</div>`:''}</div>`;}).join('');
   }
   h+='</div></section>';
   host.innerHTML=h;
@@ -315,7 +298,7 @@ function kpis(k){
     el.innerHTML=`<span>FY${S.to} median <b>${fmt(m,p.med)}</b></span><span>Range <b>${fmt(m,p.min)}</b> to <b>${fmt(m,p.max)}</b></span>${best?`<span>Best <b>${best}</b></span>`:''}`;}
   else{const v=m.d[sel][i];const p=peer(m,i,sel);const r=ranks(m,i)[sel];
     const series=YEARS.map((y,j)=>[y,m.d[sel][j]]).filter(x=>x[0]>=S.from&&x[0]<=S.to&&x[1]!=null);
-    const worst=series.length?series.reduce((a,b)=>(m.hib?b[1]<a[1]:b[1]>a[1])?b:a):null;
+    const worst=series.length?series.reduce((a,b)=>(m.hib===false?b[1]>a[1]:b[1]<a[1])?b:a):null;
     el.innerHTML=`<span>${sel} FY${S.to} <b>${fmt(m,v)}</b></span><span>Peer median <b>${fmt(m,p.med)}</b></span>${r?`<span>Rank <b>${r[0]}/${r[1]}</b></span>`:''}${worst?`<span>Weakest FY${worst[0]} <b>${fmt(m,worst[1])}</b></span>`:''}`;}
 }
 function drawChart(k,svg){
@@ -402,6 +385,7 @@ function bindData(){
 }
 
 function render(){renderScore();renderPanels();exportCSV();}
+if(!SRC){document.querySelector('main').insertAdjacentHTML('afterbegin','<div class="note"><b>Data file missing.</b> data/camels_data.js did not load. Run scripts/build_osfi_data.py, or open the page from the folder that contains the data directory.</div>');}
 buildControls();bindData();render();
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(renderPanels,150);});
 })();
