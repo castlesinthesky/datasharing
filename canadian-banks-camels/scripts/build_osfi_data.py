@@ -17,7 +17,7 @@ Usage:
   python3 scripts/build_osfi_data.py --cache DIR  # where raw CSVs live (default .cache/osfi)
 
 Outputs (relative to the dashboard folder):
-  data/osfi_camels.csv   long format: metric,bank,year,value
+  data/osfi_camels.csv   long format: metric,bank,period,value (period = 2025 or 2025Q3)
   data/osfi_inputs.csv   the raw line items behind every metric, for audit
   data/camels_data.js    the same data as a script the dashboard loads
 """
@@ -126,16 +126,24 @@ def read_monthly(path):
     return out
 
 
-def month_ends(fy):
-    """13 month-ends from Oct 31 of fy-1 to Oct 31 of fy (keys as OSFI writes them)."""
+QEND_MONTH = {1: 1, 2: 4, 3: 7, 4: 10}   # fiscal quarter -> calendar month of quarter end (Oct 31 year end)
+
+
+def month_end(y, m):
+    nxt = datetime.date(y + (m == 12), m % 12 + 1, 1)
+    return (nxt - datetime.timedelta(days=1)).isoformat()
+
+
+def window(fy, q, n):
+    """n month-ends ending at the close of fiscal quarter q of fiscal year fy."""
+    y, m = fy, QEND_MONTH[q]
     keys = []
-    for k in range(13):
-        m = 10 + k
-        y = fy - 1 + (m - 1) // 12
-        m = (m - 1) % 12 + 1
-        nxt = datetime.date(y + (m == 12), m % 12 + 1, 1)
-        keys.append((nxt - datetime.timedelta(days=1)).isoformat())
-    return keys
+    for _ in range(n):
+        keys.append(month_end(y, m))
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return keys[::-1]
 
 
 def ssum(d, keys, require_all=False):
@@ -154,79 +162,103 @@ def build(cache):
     m4 = read_monthly(os.path.join(cache, "m4.csv"))
 
     last_fy = max(y for (_, y, q) in p3 if q == 4)
+    last_q = max((y, q) for (_, y, q) in p3)
     years = list(range(FIRST_FY, last_fy + 1))
-    metrics = defaultdict(lambda: defaultdict(dict))
+    quarters = [(y, q) for y in range(FIRST_FY, last_q[0] + 1) for q in (1, 2, 3, 4) if (y, q) <= last_q]
+    annual = defaultdict(lambda: defaultdict(dict))
+    quarterly = defaultdict(lambda: defaultdict(dict))
     inputs = []
 
-    def put(m, b, y, v):
-        if v is not None:
-            metrics[m][b][y] = round(v, 4)
+    def income(b, y, q, full_year):
+        """Income items for the period. Annual = Q4 YTD; a quarter = YTD(q) - YTD(q-1)."""
+        cur = p3.get((b, y, q), {})
+        if full_year:
+            q = 1  # use the year-to-date figure as is
+        prev = p3.get((b, y, q - 1), {}) if q > 1 else {}
+        out = {}
+        for k in ("nii", "pcl", "nii_after_pcl", "rev_after_pcl", "nie", "ni_equity"):
+            v = cur.get(P3[k])
+            if q > 1:
+                pv = prev.get(P3[k])
+                v = None if v is None or pv is None else v - pv
+            out[k] = v
+        if out["pcl"] is None and out["nii"] is not None and out["nii_after_pcl"] is not None:
+            out["pcl"] = out["nii"] - out["nii_after_pcl"]
+        out["rev"] = out["rev_after_pcl"] + out["pcl"] if out["rev_after_pcl"] is not None and out["pcl"] is not None else None
+        return out
+
+    def compute(b, y, q, is_annual):
+        put_to = annual if is_annual else quarterly
+        key = y if is_annual else f"{y}Q{q}"
+        ann = 1 if is_annual else 4          # annualize quarterly flows
+        n_avg = 13 if is_annual else 4
+
+        def put(m, v):
+            if v is not None:
+                put_to[m][b][key] = round(v, 4)
+
+        ye = m4.get((b, month_end(y, QEND_MONTH[q])), {})
+        loans = ssum(ye, M4_LOANS)
+        # a bank may leave an empty deposit category blank; require the large ones
+        deps = ssum(ye, M4_DEPOSITS) if all(ye.get(k) is not None for k in ("0877", "0878", "2339")) else None
+        assets = ye.get(M4_ASSETS)
+        liquid = ssum(ye, M4_LIQUID)
+
+        def equity(d):
+            ce = ssum(d, M4_COMMON_EQ, True)
+            return None if ce is None else ce + (d.get(M4_PREF) or 0)
+        avg = {}
+        for name, fn in {"loans": lambda d: ssum(d, M4_LOANS), "assets": lambda d: d.get(M4_ASSETS), "equity": equity}.items():
+            pts = [fn(m4.get((b, k), {})) for k in window(y, q, n_avg)]
+            pts = [p for p in pts if p is not None]
+            avg[name] = sum(pts) / len(pts) if len(pts) >= n_avg - 1 else None
+
+        inc = income(b, y, q, is_annual)
+        nii, pcl, nie, ni, rev = inc["nii"], inc["pcl"], inc["nie"], inc["ni_equity"], inc["rev"]
+
+        cap = ba.get((b, y, q), {})
+        cet1 = cap.get(BA["cet1"]) if y >= 2014 else None
+        t1 = cap.get(BA["t1_b3"]) if y >= 2014 else (cap.get(BA["t1_b2"]) if y <= 2012 else None)
+        lev = None
+        lq = lr.get((b, y, q), {})
+        if lq.get(LR["exposure"]) and lq.get(LR["tier1"]) is not None:
+            lev = 100 * lq[LR["tier1"]] / lq[LR["exposure"]]
+
+        e = e3.get((b, y, q), {})
+        sch = E3_POST if y >= 2018 else E3_PRE
+        gil = e.get(sch["gil"])
+        acl = ssum(e, sch["acl"])
+        if acl is None and "acl_alt" in sch:
+            acl = ssum(e, sch["acl_alt"])
+
+        put("cet1", cet1)
+        put("t1", t1)
+        put("lev", lev)
+        put("pcl", ann * 1e4 * pcl / avg["loans"] if pcl is not None and avg["loans"] else None)
+        put("gil", 1e4 * gil / loans if gil is not None and loans else None)
+        put("cov", 100 * acl / gil if acl is not None and gil else None)
+        put("unins", 100 * ye[M4_UNINSURED] / loans if loans and ye.get(M4_UNINSURED) is not None else None)
+        put("eff", 100 * nie / rev if nie is not None and rev else None)
+        put("roe", ann * 100 * ni / avg["equity"] if ni is not None and avg["equity"] else None)
+        put("roa", ann * 1e4 * ni / avg["assets"] if ni is not None and avg["assets"] else None)
+        put("nim", ann * 100 * nii / avg["assets"] if nii is not None and avg["assets"] else None)
+        put("niish", 100 * nii / rev if nii is not None and rev else None)
+        put("ltd", 100 * loans / deps if loans and deps else None)
+        put("liq", 100 * liquid / assets if liquid is not None and assets else None)
+
+        inputs.append({"bank": b, "period": f"FY{y}" if is_annual else f"FY{y} Q{q}",
+                       "net_loans_end": loans, "deposits_end": deps, "total_assets_end": assets,
+                       "avg_loans": avg["loans"], "avg_assets": avg["assets"], "avg_sh_equity": avg["equity"],
+                       "nii": nii, "pcl": pcl, "revenue": rev, "nie": nie, "ni_to_equity_holders": ni,
+                       "gross_impaired": gil, "allowance_total": acl, "uninsured_resi_mortgages": ye.get(M4_UNINSURED),
+                       "insured_resi_mortgages": ye.get(M4_INSURED), "cet1_ratio": cet1, "tier1_ratio": t1, "leverage_ratio": lev})
 
     for b in BANKS.values():
         for y in years:
-            q4 = (b, y, 4)
-            # ---- M4 balance sheet: year-end and 13-month averages
-            ye = m4.get((b, f"{y}-10-31"), {})
-            loans = ssum(ye, M4_LOANS)
-            # a bank may leave an empty deposit category blank; require the large ones
-            deps = ssum(ye, M4_DEPOSITS) if all(ye.get(k) is not None for k in ("0877", "0878", "2339")) else None
-            assets = ye.get(M4_ASSETS)
-            liquid = ssum(ye, M4_LIQUID)
-            avg = {}
-            for name, fn in {
-                "loans": lambda d: ssum(d, M4_LOANS),
-                "assets": lambda d: d.get(M4_ASSETS),
-                "equity": lambda d: (ssum(d, M4_COMMON_EQ, True) or 0) + (d.get(M4_PREF) or 0) if ssum(d, M4_COMMON_EQ, True) is not None else None,
-            }.items():
-                pts = [fn(m4.get((b, k), {})) for k in month_ends(y)]
-                pts = [p for p in pts if p is not None]
-                avg[name] = sum(pts) / len(pts) if len(pts) >= 12 else None
-
-            # ---- P3 income statement (Q4 year-to-date = fiscal year)
-            inc = p3.get(q4, {})
-            nii, pcl, nie, ni = inc.get(P3["nii"]), inc.get(P3["pcl"]), inc.get(P3["nie"]), inc.get(P3["ni_equity"])
-            if pcl is None and inc.get(P3["nii"]) is not None and inc.get(P3["nii_after_pcl"]) is not None:
-                pcl = inc[P3["nii"]] - inc[P3["nii_after_pcl"]]
-            rev = inc.get(P3["rev_after_pcl"]) + pcl if inc.get(P3["rev_after_pcl"]) is not None and pcl is not None else None
-
-            # ---- capital
-            cap = ba.get(q4, {})
-            cet1 = cap.get(BA["cet1"]) if y >= 2014 else None
-            t1 = cap.get(BA["t1_b3"]) if y >= 2014 else (cap.get(BA["t1_b2"]) if y <= 2012 else None)
-            lev = None
-            l4 = lr.get(q4, {})
-            if l4.get(LR["exposure"]) and l4.get(LR["tier1"]) is not None:
-                lev = 100 * l4[LR["tier1"]] / l4[LR["exposure"]]
-
-            # ---- impaired loans
-            e = e3.get(q4, {})
-            sch = E3_POST if y >= 2018 else E3_PRE
-            gil = e.get(sch["gil"])
-            acl = ssum(e, sch["acl"])
-            if acl is None and "acl_alt" in sch:
-                acl = ssum(e, sch["acl_alt"])
-
-            put("cet1", b, y, cet1)
-            put("t1", b, y, t1)
-            put("lev", b, y, lev)
-            put("pcl", b, y, 1e4 * pcl / avg["loans"] if pcl is not None and avg["loans"] else None)
-            put("gil", b, y, 1e4 * gil / loans if gil is not None and loans else None)
-            put("cov", b, y, 100 * acl / gil if acl is not None and gil else None)
-            put("unins", b, y, 100 * ye[M4_UNINSURED] / loans if loans and ye.get(M4_UNINSURED) is not None else None)
-            put("eff", b, y, 100 * nie / rev if nie is not None and rev else None)
-            put("roe", b, y, 100 * ni / avg["equity"] if ni is not None and avg["equity"] else None)
-            put("roa", b, y, 1e4 * ni / avg["assets"] if ni is not None and avg["assets"] else None)
-            put("nim", b, y, 100 * nii / avg["assets"] if nii is not None and avg["assets"] else None)
-            put("niish", b, y, 100 * nii / rev if nii is not None and rev else None)
-            put("ltd", b, y, 100 * loans / deps if loans and deps else None)
-            put("liq", b, y, 100 * liquid / assets if liquid is not None and assets else None)
-
-            inputs.append({"bank": b, "fy": y, "net_loans_ye": loans, "deposits_ye": deps, "total_assets_ye": assets,
-                           "avg_loans_13m": avg["loans"], "avg_assets_13m": avg["assets"], "avg_sh_equity_13m": avg["equity"],
-                           "nii": nii, "pcl": pcl, "revenue": rev, "nie": nie, "ni_to_equity_holders": ni,
-                           "gross_impaired": gil, "allowance_total": acl, "uninsured_resi_mortgages": ye.get(M4_UNINSURED),
-                           "insured_resi_mortgages": ye.get(M4_INSURED), "cet1_ratio": cet1, "tier1_ratio": t1, "leverage_ratio": lev})
-    return years, metrics, inputs
+            compute(b, y, 4, True)
+        for y, q in quarters:
+            compute(b, y, q, False)
+    return years, quarters, annual, quarterly, inputs
 
 
 def main():
@@ -235,16 +267,18 @@ def main():
     ap.add_argument("--refresh", action="store_true")
     a = ap.parse_args()
     download(a.cache, a.refresh)
-    years, metrics, inputs = build(a.cache)
+    years, quarters, annual, quarterly, inputs = build(a.cache)
+    qkeys = [f"{y}Q{q}" for y, q in quarters]
 
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
     with open(os.path.join(ROOT, "data", "osfi_camels.csv"), "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["metric", "bank", "year", "value"])
-        for m in metrics:
-            for b in metrics[m]:
-                for y, v in sorted(metrics[m][b].items()):
-                    w.writerow([m, b, y, v])
+        w.writerow(["metric", "bank", "period", "value"])
+        for store in (annual, quarterly):
+            for m in store:
+                for b in store[m]:
+                    for k, v in store[m][b].items():
+                        w.writerow([m, b, k, v])
     with open(os.path.join(ROOT, "data", "osfi_inputs.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(inputs[0].keys()))
         w.writeheader()
@@ -253,12 +287,14 @@ def main():
         "source": "OSFI regulatory returns (BA, LR, P3, E3, M4), Open Government Portal dataset 91ed76b4-a1a2-4f87-9c4c-59cd64f7a9de",
         "built": datetime.date.today().isoformat(),
         "years": years,
-        "metrics": {m: {b: [metrics[m][b].get(y) for y in years] for b in BANKS.values()} for m in metrics},
+        "metrics": {m: {b: [annual[m][b].get(y) for y in years] for b in BANKS.values()} for m in annual},
+        "quarters": qkeys,
+        "qmetrics": {m: {b: [quarterly[m][b].get(k) for k in qkeys] for b in BANKS.values()} for m in quarterly},
     }
     with open(os.path.join(ROOT, "data", "camels_data.js"), "w") as f:
         f.write("/* Generated by scripts/build_osfi_data.py - do not edit by hand. */\n")
         f.write("window.CAMELS_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n")
-    print(f"built FY{years[0]}-FY{years[-1]}: {len(metrics)} metrics", file=sys.stderr)
+    print(f"built FY{years[0]}-FY{years[-1]} annual and {qkeys[0]}-{qkeys[-1]} quarterly: {len(annual)} metrics", file=sys.stderr)
 
 
 if __name__ == "__main__":

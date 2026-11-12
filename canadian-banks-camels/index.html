@@ -99,18 +99,21 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
 
 <header class="top wrap">
   <h1>Big Six CAMELS Monitor</h1>
-  <p class="sub">Annual fiscal-year-end (Oct 31) metrics for RBC, TD, Scotiabank, BMO, CIBC and National Bank, FY2009 onward, built from OSFI regulatory filings. Switch between the peer group and a single bank, and hover any chart to read values.</p>
+  <p class="sub">Annual and quarterly metrics (fiscal year ends Oct 31) for RBC, TD, Scotiabank, BMO, CIBC and National Bank, FY2009 onward, built from OSFI regulatory filings. Switch between the peer group and a single bank, and hover any chart to read values.</p>
 </header>
 
 <div class="bar">
   <div class="wrap">
+    <div class="ctl"><span class="lbl">Frequency</span>
+      <div class="seg" id="freqSeg" role="group" aria-label="Frequency"></div>
+    </div>
     <div class="ctl"><span class="lbl">View</span>
       <div class="seg" id="viewSeg" role="group" aria-label="View"></div>
     </div>
     <div class="ctl"><span class="lbl">Years</span>
       <select id="yFrom" aria-label="From year"></select><span class="lbl">to</span><select id="yTo" aria-label="To year"></select>
     </div>
-    <div class="ctl"><span class="lbl">Scorecard year</span><select id="yScore" aria-label="Scorecard year"></select></div>
+    <div class="ctl"><span class="lbl" id="scoreLbl">Scorecard year</span><select id="yScore" aria-label="Scorecard year"></select></div>
     <div class="ctl"><label class="lbl" for="evToggle">Events</label><input type="checkbox" id="evToggle" checked></div>
   </div>
 </div>
@@ -128,16 +131,16 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
 
   <section id="data">
     <h2>Data &amp; import</h2>
-    <p class="desc">Paste CSV with columns <code>metric,bank,year,value</code>. Use a built-in metric key to override it (<span id="keyList"></span>), or a new key to add your own chart under <i>Imported</i>. Banks: <code>RY TD BNS BMO CM NA</code>. Imports are saved in this browser only.</p>
+    <p class="desc">Paste CSV with columns <code>metric,bank,period,value</code>, where period is a fiscal year (<code>2025</code>) or quarter (<code>2025Q3</code>). Use a built-in metric key to override it (<span id="keyList"></span>), or a new key to add your own chart under <i>Imported</i>. Banks: <code>RY TD BNS BMO CM NA</code>. Imports are saved in this browser only.</p>
     <div class="tools">
       <div class="card">
         <h3>Import</h3>
-        <textarea id="csvIn" spellcheck="false" placeholder="metric,bank,year,value&#10;cet1,RY,2025,13.5&#10;gil,TD,2025,0.62"></textarea>
+        <textarea id="csvIn" spellcheck="false" placeholder="metric,bank,period,value&#10;cet1,RY,2025,13.5&#10;cet1,RY,2026Q3,13.6"></textarea>
         <div class="row"><button class="btn" id="btnImport">Apply import</button><button class="btn" id="btnClear">Clear imported data</button><input type="file" id="fileIn" accept=".csv,text/csv" aria-label="Load CSV file"><span class="msg" id="impMsg"></span></div>
       </div>
       <div class="card">
         <h3>Export</h3>
-        <p class="def">Every value currently in the dashboard, OSFI and imported, in the same CSV layout.</p>
+        <p class="def">Every <span id="expLbl">annual</span> value currently in the dashboard, OSFI and imported, in the same CSV layout. Switch frequency to export the other set.</p>
         <textarea id="csvOut" spellcheck="false" readonly></textarea>
         <div class="row"><button class="btn" id="btnCopy">Copy CSV</button><span class="msg" id="cpMsg"></span></div>
       </div>
@@ -146,7 +149,7 @@ ul.src{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
       <h3>Definitions and regime breaks</h3>
       <ul class="src">
         <li><b>Build.</b> <code>python3 scripts/build_osfi_data.py</code> downloads the five OSFI files (about 1.2 GB, cached in <code>.cache/osfi</code>) and rewrites <code>data/camels_data.js</code>, <code>data/osfi_camels.csv</code> and <code>data/osfi_inputs.csv</code>. Use <code>--refresh</code> after each OSFI release.</li>
-        <li><b>Fiscal year.</b> Income items are Q4 year-to-date. Ratios on averages use 13 month-ends (October to October) from the monthly balance sheet.</li>
+        <li><b>Periods.</b> Annual income items are Q4 year-to-date, and annual averages use 13 month-ends (October to October). Quarterly income items are the change in year-to-date figures, annualized (×4) for PCL, ROE, ROA and NII/assets. Quarterly averages use the quarter's four month-ends. Capital, leverage, impaired loans and balance-sheet ratios are at period-end.</li>
         <li><b>Capital.</b> CET1 from FY2014. OSFI's open data carries only a transitional figure for FY2013, so it is left blank. Tier 1 uses Basel II for FY2009-12. Basel III reforms took effect in Q2 FY2023.</li>
         <li><b>IFRS transitions.</b> FY2012 (IFRS adoption) brought securitized mortgages onto the balance sheet, which lifts loans/deposits and lowers liquidity ratios. FY2018 (IFRS 9) moved impaired loans to stage 3 and added performing-loan provisions to PCL.</li>
         <li><b>Known distortions.</b> TD FY2023-24 (FHN termination, AML charges) and FY2025 (gain on the Schwab stake sale), BMO FY2022-23 (Bank of the West hedge gains, then losses), NA from FY2018 (Credigy purchased credit-impaired loans in stage 3) and NA from FY2023 (funding costs of trading positions in NII).</li>
@@ -191,17 +194,28 @@ const META={
   mem:{RY:[124,127,119,124,123,145,125,125,131,129,128],TD:[125,124,120,127,133,145,124,118,141,138,138],BNS:[124,127,125,124,124,136,123,119,136,129,128],BMO:[129,129,127,134,133,145,128,135,135,129,132],CM:[119,124,127,129,125,145,127,129,136,131,130],NA:[132,145,136,147,146,161,154,140,155,155,140]},memFrom:2015},
  niish:{L:'S',label:'NII share of revenue',unit:'%',dec:0,hib:null,conf:OSFI,def:'Net interest income / total revenue. Higher means earnings lean harder on rates and spreads. Not ranked: neither direction is better.'}
 };
-const YEARS=SRC?SRC.years.slice():[];
-const BASE={};
-for(const k in META){const m=META[k];
-  if(m.mem){BASE[k]={...m,d:{}};for(const b of ['RY','TD','BNS','BMO','CM','NA']){const a=YEARS.map(()=>null);m.mem[b].forEach((v,i)=>{const j=YEARS.indexOf(m.memFrom+i);if(j>=0)a[j]=v;});BASE[k].d[b]=a;}}
-  else if(SRC&&SRC.metrics[k]){BASE[k]={...m,d:SRC.metrics[k]};}
+/* ---------- periods: annual (fiscal year) and quarterly (fiscal quarter) ---------- */
+const PER={A:{keys:[],x:[],fy:[],lab:[],short:[]},Q:{keys:[],x:[],fy:[],lab:[],short:[]}};
+if(SRC){
+  for(const y of SRC.years){PER.A.keys.push(String(y));PER.A.x.push(y);PER.A.fy.push(y);PER.A.lab.push('FY'+y);PER.A.short.push('FY'+y);}
+  for(const k of (SRC.quarters||[])){const y=+k.slice(0,4),q=+k.slice(5);PER.Q.keys.push(k);PER.Q.x.push(y-1+q/4);PER.Q.fy.push(y);PER.Q.lab.push(`Q${q} FY${y}`);PER.Q.short.push(`Q${q} '${String(y).slice(2)}`);}
 }
+function baseFor(f){
+  const keys=PER[f].keys,B={};
+  for(const k in META){const m=META[k];
+    if(m.mem){if(f!=='A')continue;B[k]={...m,d:{}};for(const b of BANKS){const arr=keys.map(()=>null);m.mem[b.id].forEach((v,i)=>{const j=keys.indexOf(String(m.memFrom+i));if(j>=0)arr[j]=v;});B[k].d[b.id]=arr;}}
+    else{const src=f==='A'?SRC&&SRC.metrics:SRC&&SRC.qmetrics;if(src&&src[k])B[k]={...m,d:src[k]};}
+  }
+  return B;
+}
+const BASES={A:baseFor('A'),Q:baseFor('Q')};
 const DERIVED={
- roedev:{L:'S',label:'Earnings sensitivity',unit:'pp',dec:1,hib:true,conf:'derived',def:'ROE minus its trailing 5-year average; deep negatives flag earnings that crack under stress',zero:true,
-   from:'roe',fn:(a,i)=>{const w=a.slice(Math.max(0,i-5),i).filter(v=>v!=null);return (a[i]==null||w.length<3)?null:a[i]-w.reduce((s,v)=>s+v,0)/w.length;}},
- pclchg:{L:'S',label:'Credit-cycle sensitivity',unit:'bps',dec:0,hib:false,conf:'derived',def:'Year-over-year change in PCL ratio; size of the swing in a downturn',zero:true,
-   from:'pcl',fn:(a,i)=>(i===0||a[i]==null||a[i-1]==null)?null:a[i]-a[i-1]}
+ roedev:{L:'S',label:'Earnings sensitivity',unit:'pp',dec:1,hib:true,conf:'derived',zero:true,from:'roe',
+   def:f=>f==='A'?'ROE minus its trailing 5-year average. Deep negatives flag earnings that crack under stress.':'Annualized quarterly ROE minus its trailing 20-quarter average. Deep negatives flag earnings that crack under stress.',
+   fn:(a,i,f)=>{const n=f==='A'?5:20,w=a.slice(Math.max(0,i-n),i).filter(v=>v!=null);return (a[i]==null||w.length<(f==='A'?3:8))?null:a[i]-w.reduce((s,v)=>s+v,0)/w.length;}},
+ pclchg:{L:'S',label:'Credit-cycle sensitivity',unit:'bps',dec:0,hib:false,conf:'derived',zero:true,from:'pcl',
+   def:f=>f==='A'?'Year-over-year change in the PCL ratio: the size of the swing in a downturn.':'Change in the annualized PCL ratio versus the same quarter a year earlier.',
+   fn:(a,i,f)=>{const l=f==='A'?1:4;return (i<l||a[i]==null||a[i-l]==null)?null:a[i]-a[i-l];}}
 };
 const LETTERS=[
  ['C','Capital adequacy','Loss-absorbing capital against risk-weighted and total exposure.'],
@@ -211,29 +225,35 @@ const LETTERS=[
  ['L','Liquidity','Funding structure and liquid-asset cushion. LCR is the regulatory measure but is not yet sourced.'],
  ['S','Sensitivity','Reliance on spread income, and how hard earnings and credit costs move when the cycle turns. The last two are derived from the ROE and PCL series.'],
  ['X','Imported','Metrics added through CSV import.']];
-const EVENTS=[[2009,'GFC tail'],[2015,'Oil shock'],[2018,'IFRS 9'],[2020,'COVID'],[2022,'Rate hikes'],[2024,'TD AML']];
+/* event x positions: fiscal year (annual) or the quarter the event landed in */
+const EVENTS=[[2009,4,'GFC tail'],[2015,2,'Oil shock'],[2018,1,'IFRS 9'],[2020,2,'COVID'],[2022,2,'Rate hikes'],[2024,4,'TD AML']];
 
 /* ---------- state ---------- */
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 let imported={};try{imported=JSON.parse(store.get('camels.imported')||'{}')||{}}catch(e){imported={}}
-const Y0=YEARS[0]||2009,Y1=YEARS[YEARS.length-1]||2025;
-let S={view:store.get('camels.view')||'GROUP',from:Y0,to:Y1,score:Y1,events:true,hidden:new Set(),hover:null};
+const fyRange=f=>{const a=PER[f].fy;return a.length?[a[0],a[a.length-1]]:[2009,2025];};
+let S={view:store.get('camels.view')||'GROUP',freq:store.get('camels.freq')==='Q'?'Q':'A',from:2009,to:null,score:{A:null,Q:null},events:true,hidden:new Set(),hover:null};
 if(S.view!=='GROUP'&&!BANKS.some(b=>b.id===S.view))S.view='GROUP';
+if(!PER.Q.keys.length)S.freq='A';
+S.to=fyRange(S.freq)[1];S.from=Math.max(fyRange(S.freq)[0],S.from);
+let P=PER[S.freq];
 
-function metrics(){
-  const M={};
-  for(const k in BASE){M[k]={...BASE[k],key:k,d:{}};for(const b of BANKS)M[k].d[b.id]=BASE[k].d[b.id].slice();}
+function metrics(f){
+  const keys=PER[f].keys,M={},B=BASES[f];
+  const qdef=t=>f==='Q'?t.replace(/13-month average/g,'quarter-average (4 month-ends)').replace(/year-end/g,'quarter-end'):t;
+  for(const k in B){M[k]={...B[k],def:qdef(B[k].def),key:k,d:{}};for(const b of BANKS)M[k].d[b.id]=B[k].d[b.id].slice();}
   for(const k in imported){
-    if(!M[k]&&!DERIVED[k])M[k]={L:'X',label:k,unit:'',dec:2,hib:true,conf:'imported',def:'Imported series (direction assumed: higher is better)',key:k,d:{}};
-    if(!M[k])continue;
-    for(const b of BANKS){if(!M[k].d[b.id])M[k].d[b.id]=YEARS.map(()=>N);
-      const o=imported[k][b.id];if(o)for(const y in o){const i=YEARS.indexOf(+y);if(i>=0)M[k].d[b.id][i]=o[y];}}
+    const hits=[];for(const b in imported[k])for(const pk in imported[k][b])if(keys.includes(pk))hits.push([b,pk]);
+    if(!hits.length)continue;
+    if(!M[k])M[k]={L:'X',label:k,unit:'',dec:2,hib:true,conf:'imported',def:'Imported series (direction assumed: higher is better)',key:k,d:{}};
+    for(const b of BANKS)if(!M[k].d[b.id])M[k].d[b.id]=keys.map(()=>N);
+    for(const [b,pk] of hits)M[k].d[b][keys.indexOf(pk)]=imported[k][b][pk];
     if(M[k].conf!=='imported')M[k].confNote='includes imported values';
   }
-  for(const k in DERIVED){const D=DERIVED[k];M[k]={...D,key:k,d:{}};for(const b of BANKS){const a=M[D.from].d[b.id];M[k].d[b.id]=a.map((_,i)=>D.fn(a,i));}}
+  for(const k in DERIVED){const D=DERIVED[k];if(!M[D.from])continue;M[k]={...D,def:D.def(f),key:k,d:{}};for(const b of BANKS){const a=M[D.from].d[b.id];M[k].d[b.id]=a.map((_,i)=>D.fn(a,i,f));}}
   return M;
 }
-let MET=metrics();
+let MET=metrics(S.freq);
 
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
@@ -244,24 +264,48 @@ function peer(m,i,excl){const v=BANKS.filter(b=>b.id!==excl).map(b=>m.d[b.id][i]
 function ranks(m,i){const r={};if(m.hib==null)return r;const v=BANKS.map(b=>[b.id,m.d[b.id][i]]).filter(x=>x[1]!=null).sort((a,b)=>m.hib?b[1]-a[1]:a[1]-b[1]);v.forEach((x,j)=>r[x[0]]=[j+1,v.length]);return r;}
 function niceTicks(lo,hi,n){const span=hi-lo||1;const step0=span/n;const mag=Math.pow(10,Math.floor(Math.log10(step0)));const s=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=step0)||10*mag;const a=Math.floor(lo/s)*s,b=Math.ceil(hi/s)*s;const t=[];for(let v=a;v<=b+1e-9;v+=s)t.push(+v.toFixed(6));return t;}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const inRange=()=>P.keys.map((_,i)=>i).filter(i=>P.fy[i]>=S.from&&P.fy[i]<=S.to);
+const endIdx=()=>{const r=inRange();return r.length?r[r.length-1]:P.keys.length-1;};
+const scoreIdx=()=>{const v=S.score[S.freq];return v==null||v>=P.keys.length?P.keys.length-1:v;};
+const rangeLab=()=>{const r=inRange();return r.length?`${P.lab[r[0]]} to ${P.lab[r[r.length-1]]}`:'';};
 
 /* ---------- controls ---------- */
+function fillSelects(){
+  const [a,b]=fyRange(S.freq);const ys=[];for(let y=a;y<=b;y++)ys.push(y);
+  S.from=Math.min(Math.max(S.from,a),b);S.to=Math.min(Math.max(S.to,a),b);if(S.from>=S.to){S.from=a;S.to=b;}
+  $('#yFrom').innerHTML=ys.map(y=>`<option value="${y}"${y===S.from?' selected':''}>FY${y}</option>`).join('');
+  $('#yTo').innerHTML=ys.map(y=>`<option value="${y}"${y===S.to?' selected':''}>FY${y}</option>`).join('');
+  const si=scoreIdx();
+  $('#yScore').innerHTML=P.keys.map((_,i)=>i).reverse().map(i=>`<option value="${i}"${i===si?' selected':''}>${P.lab[i]}</option>`).join('');
+  $('#scoreLbl').textContent=S.freq==='A'?'Scorecard year':'Scorecard quarter';
+}
 function buildControls(){
   const seg=$('#viewSeg');
   seg.innerHTML=`<button data-v="GROUP" aria-pressed="${S.view==='GROUP'}">Peer group</button>`+BANKS.map(b=>`<button data-v="${b.id}" aria-pressed="${S.view===b.id}" title="${b.name}"><span class="sw" style="background:${col(b.id)}"></span>${b.id}</button>`).join('');
   seg.onclick=e=>{const t=e.target.closest('button');if(!t)return;setView(t.dataset.v);};
-  for(const [id,val] of [['#yFrom',S.from],['#yTo',S.to],['#yScore',S.score]]){const el=$(id);el.innerHTML=YEARS.map(y=>`<option value="${y}"${y===val?' selected':''}>FY${y}</option>`).join('');}
-  $('#yFrom').onchange=e=>{S.from=+e.target.value;if(S.from>=S.to){S.to=Math.min(Y1,S.from+1);$('#yTo').value=S.to;}renderPanels();};
-  $('#yTo').onchange=e=>{S.to=+e.target.value;if(S.to<=S.from){S.from=Math.max(Y0,S.to-1);$('#yFrom').value=S.from;}renderPanels();};
-  $('#yScore').onchange=e=>{S.score=+e.target.value;renderScore();};
+  const fs=$('#freqSeg');
+  fs.innerHTML=`<button data-f="A" aria-pressed="${S.freq==='A'}">Annual</button><button data-f="Q" aria-pressed="${S.freq==='Q'}"${PER.Q.keys.length?'':' disabled'}>Quarterly</button>`;
+  fs.onclick=e=>{const t=e.target.closest('button');if(!t||t.dataset.f===S.freq)return;setFreq(t.dataset.f);};
+  fillSelects();
+  $('#yFrom').onchange=e=>{S.from=+e.target.value;if(S.from>=S.to){S.to=Math.min(fyRange(S.freq)[1],S.from+1);$('#yTo').value=S.to;}renderPanels();};
+  $('#yTo').onchange=e=>{S.to=+e.target.value;if(S.to<=S.from){S.from=Math.max(fyRange(S.freq)[0],S.to-1);$('#yFrom').value=S.from;}renderPanels();};
+  $('#yScore').onchange=e=>{S.score[S.freq]=+e.target.value;renderScore();};
   $('#evToggle').onchange=e=>{S.events=e.target.checked;renderPanels();};
 }
 function setView(v){S.view=v;store.set('camels.view',v);document.querySelectorAll('#viewSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));render();}
+function setFreq(f){
+  const wasLatest=S.to===fyRange(S.freq)[1];
+  S.freq=f;store.set('camels.freq',f);P=PER[f];S.hover=null;$('#tip').style.display='none';
+  if(wasLatest)S.to=fyRange(f)[1];
+  MET=metrics(f);
+  document.querySelectorAll('#freqSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===f));
+  fillSelects();render();
+}
 
 /* ---------- scorecard ---------- */
 function renderScore(){
-  const i=YEARS.indexOf(S.score);const sel=S.view;
-  $('#scoreSub').textContent=`FY${S.score}`+(sel!=='GROUP'?` · ${BANKS.find(b=>b.id===sel).name} highlighted`:'');
+  const i=scoreIdx();const sel=S.view;
+  $('#scoreSub').textContent=P.lab[i]+(S.freq==='Q'?' · flows annualized':'')+(sel!=='GROUP'?` · ${BANKS.find(b=>b.id===sel).name} highlighted`:'');
   let h='<thead><tr><th>Metric</th>'+BANKS.map(b=>`<th class="bank${b.id===sel?' hl':''}" data-b="${b.id}" title="Open ${b.name}">${b.id}</th>`).join('')+'<th>Median</th>'+(sel!=='GROUP'?`<th class="hl">${sel} vs median</th>`:'')+'</tr></thead><tbody>';
   for(const [L,name] of LETTERS){
     const ks=Object.keys(MET).filter(k=>MET[k].L===L);if(!ks.length)continue;
@@ -279,62 +323,69 @@ function renderScore(){
 
 /* ---------- charts ---------- */
 const charts=[];
+const FLOW=new Set(['pcl','roe','roa','nim','eff','niish','roedev','pclchg']);
 function renderPanels(){
   charts.length=0;const host=$('#panels');
   const legend=`<div class="legend">${S.view==='GROUP'?BANKS.map(b=>`<span><i style="background:${col(b.id)}"></i>${b.id}</span>`).join(''):`<span><i style="background:${col(S.view)}"></i>${S.view}</span><span><i class="band"></i>Peer range (ex ${S.view})</span><span><i class="faint"></i>Other banks</span>`}<span><i class="dash"></i>${S.view==='GROUP'?'Peer median':'Peer median (ex '+S.view+')'}</span><span><i class="dot"></i>Regulatory minimum</span></div>`;
-  let h=`<section><h2>CAMELS panels <span class="desc" style="margin:0">FY${S.from} to FY${S.to}</span></h2><p class="desc">${LETTERS.filter(([L])=>Object.keys(MET).some(k=>MET[k].L===L)).map(([L,n,d])=>`<b>${L}</b> ${n}: ${d}`).join(' ')}</p>${legend}<div class="grid">`;
+  const qnote=S.freq==='Q'?' Quarterly view: income-based ratios (PCL, ROE, ROA, NII/assets) are annualized, averages use the quarter\'s four month-ends, and balance-sheet ratios are at quarter-end. LCR is shown in the annual view only.':'';
+  let h=`<section><h2>CAMELS panels <span class="desc" style="margin:0">${rangeLab()}</span></h2><p class="desc">${LETTERS.filter(([L])=>Object.keys(MET).some(k=>MET[k].L===L)).map(([L,n,d])=>`<b>${L}</b> ${n}: ${d}`).join(' ')}${qnote}</p>${legend}<div class="grid">`;
   for(const [L,name] of LETTERS){
     const ks=Object.keys(MET).filter(k=>MET[k].L===L);
-    h+=ks.map(k=>{const m=MET[k];
-      return `<div class="card" data-k="${k}"><div class="meta"><h3><span class="let" title="${name}">${L}</span>${esc(m.label)} <span style="color:var(--ink-3);font-weight:400">(${m.unit||'value'})</span></h3><span class="conf ${m.conf}" title="${m.confNote||''}">${m.conf==='osfi'?'OSFI filing':m.conf}${m.confNote?' + import':''}</span></div><div class="def">${esc(m.def)}</div><div class="kpi" id="kpi-${k}"></div><svg class="chart" id="ch-${k}" role="img" aria-label="${esc(m.label)} by year"></svg>${m.floor?`<div class="foot">Dotted red line: ${m.floor.t}</div>`:''}</div>`;}).join('');
+    h+=ks.map(k=>{const m=MET[k];const ann=S.freq==='Q'&&FLOW.has(k)&&!['eff','niish','roedev','pclchg'].includes(k)?', annualized':'';
+      return `<div class="card" data-k="${k}"><div class="meta"><h3><span class="let" title="${name}">${L}</span>${esc(m.label)} <span style="color:var(--ink-3);font-weight:400">(${m.unit||'value'}${ann})</span></h3><span class="conf ${m.conf}" title="${m.confNote||''}">${m.conf==='osfi'?'OSFI filing':m.conf}${m.confNote?' + import':''}</span></div><div class="def">${esc(m.def)}</div><div class="kpi" id="kpi-${k}"></div><svg class="chart" id="ch-${k}" role="img" aria-label="${esc(m.label)} by ${S.freq==='A'?'year':'quarter'}"></svg>${m.floor?`<div class="foot">Dotted red line: ${m.floor.t}</div>`:''}</div>`;}).join('');
   }
   h+='</div></section>';
   host.innerHTML=h;
   for(const k in MET){const svg=document.getElementById('ch-'+k);if(svg){charts.push({k,svg});drawChart(k,svg);kpis(k);}}
 }
 function kpis(k){
-  const m=MET[k];const el=document.getElementById('kpi-'+k);const i=YEARS.indexOf(S.to);const sel=S.view;
+  const m=MET[k];const el=document.getElementById('kpi-'+k);const i=endIdx();const sel=S.view;
   if(sel==='GROUP'){const p=peer(m,i);const r=ranks(m,i);const best=Object.keys(r).find(b=>r[b][0]===1);
-    el.innerHTML=`<span>FY${S.to} median <b>${fmt(m,p.med)}</b></span><span>Range <b>${fmt(m,p.min)}</b> to <b>${fmt(m,p.max)}</b></span>${best?`<span>Best <b>${best}</b></span>`:''}`;}
+    el.innerHTML=`<span>${P.lab[i]} median <b>${fmt(m,p.med)}</b></span><span>Range <b>${fmt(m,p.min)}</b> to <b>${fmt(m,p.max)}</b></span>${best?`<span>Best <b>${best}</b></span>`:''}`;}
   else{const v=m.d[sel][i];const p=peer(m,i,sel);const r=ranks(m,i)[sel];
-    const series=YEARS.map((y,j)=>[y,m.d[sel][j]]).filter(x=>x[0]>=S.from&&x[0]<=S.to&&x[1]!=null);
-    const worst=series.length?series.reduce((a,b)=>(m.hib===false?b[1]>a[1]:b[1]<a[1])?b:a):null;
-    el.innerHTML=`<span>${sel} FY${S.to} <b>${fmt(m,v)}</b></span><span>Peer median <b>${fmt(m,p.med)}</b></span>${r?`<span>Rank <b>${r[0]}/${r[1]}</b></span>`:''}${worst?`<span>Weakest FY${worst[0]} <b>${fmt(m,worst[1])}</b></span>`:''}`;}
+    const series=inRange().map(j=>[j,m.d[sel][j]]).filter(x=>x[1]!=null);
+    const worst=series.length&&m.hib!=null?series.reduce((a,b)=>(m.hib===false?b[1]>a[1]:b[1]<a[1])?b:a):null;
+    el.innerHTML=`<span>${sel} ${P.lab[i]} <b>${fmt(m,v)}</b></span><span>Peer median <b>${fmt(m,p.med)}</b></span>${r?`<span>Rank <b>${r[0]}/${r[1]}</b></span>`:''}${worst?`<span>Weakest ${P.lab[worst[0]]} <b>${fmt(m,worst[1])}</b></span>`:''}`;}
 }
 function drawChart(k,svg){
   const m=MET[k];const W=Math.max(280,svg.clientWidth||520),H=220;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   const pad={l:44,r:S.view==='GROUP'?14:84,t:28,b:24};
-  const idx=YEARS.map((y,i)=>i).filter(i=>YEARS[i]>=S.from&&YEARS[i]<=S.to);
+  const idx=inRange();const XS=P.x;const Q=S.freq==='Q';
   const vis=BANKS.filter(b=>!S.hidden.has(b.id));
   let vals=[];for(const b of BANKS)for(const i of idx){const v=m.d[b.id][i];if(v!=null)vals.push(v);}
   if(m.floor)vals.push(m.floor.v);if(m.zero)vals.push(0);
-  if(!vals.length){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle">No data in this range</text>`;return;}
+  if(!vals.length||!idx.length){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle">${Q&&m.mem?'Annual view only':'No data in this range'}</text>`;return;}
   let lo=Math.min(...vals),hi=Math.max(...vals);const padv=(hi-lo)*.08||1;lo-=padv;hi+=padv;
   const ticks=niceTicks(lo,hi,4);lo=Math.min(lo,ticks[0]);hi=Math.max(hi,ticks[ticks.length-1]);
-  const x0=YEARS[idx[0]],x1=YEARS[idx[idx.length-1]];
-  const X=y=>pad.l+(x1===x0?0.5:(y-x0)/(x1-x0))*(W-pad.l-pad.r);
+  const x0=XS[idx[0]],x1=XS[idx[idx.length-1]];
+  const X=x=>pad.l+(x1===x0?0.5:(x-x0)/(x1-x0))*(W-pad.l-pad.r);
   const Y=v=>pad.t+(1-(v-lo)/(hi-lo))*(H-pad.t-pad.b);
   let g='';
   for(const t of ticks){if(t<lo-1e-9||t>hi+1e-9)continue;g+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)" stroke-width="1"/><text x="${pad.l-6}" y="${Y(t)+3.5}" text-anchor="end">${+t.toFixed(2)}</text>`;}
-  const every=Math.ceil(idx.length/(W<420?5:9));
-  idx.forEach((i,j)=>{if(j%every===0||j===idx.length-1)g+=`<text x="${X(YEARS[i])}" y="${H-6}" text-anchor="middle">${String(YEARS[i]).slice(2).padStart(3,"'")}</text>`;});
-  if(S.events)EVENTS.forEach(([y,t],ei)=>{if(y<x0||y>x1)return;g+=`<line x1="${X(y)}" x2="${X(y)}" y1="${pad.t}" y2="${H-pad.b}" stroke="var(--rule)" stroke-dasharray="2 3"/><text class="ev" x="${X(y)+3}" y="${ei%2?pad.t-4:pad.t-15}">${t}</text>`;});
+  // x labels: fiscal years. In quarterly view, label each year at its Q4.
+  const yrsIdx=Q?idx.filter(i=>P.keys[i].endsWith('Q4')||i===idx[idx.length-1]):idx;
+  const every=Math.ceil(yrsIdx.length/(W<420?5:9));
+  const xl=[];yrsIdx.forEach((i,j)=>{if(j%every===0||j===yrsIdx.length-1)xl.push([X(XS[i]),Q&&!P.keys[i].endsWith('Q4')?P.short[i]:"'"+String(P.fy[i]).slice(2)]);});
+  if(xl.length>1&&xl[xl.length-1][0]-xl[xl.length-2][0]<(Q?44:26))xl.splice(xl.length-2,1); // keep the latest period's label
+  for(const [lx,lbl] of xl){const anc=lx>W-pad.r-22&&pad.r<40?'end':'middle';g+=`<text x="${anc==='end'?Math.min(lx+6,W-2):lx}" y="${H-6}" text-anchor="${anc}">${lbl}</text>`;}
+  if(S.events)EVENTS.forEach(([y,q,t],ei)=>{const ex=Q?y-1+q/4:y;if(ex<x0||ex>x1)return;g+=`<line x1="${X(ex)}" x2="${X(ex)}" y1="${pad.t}" y2="${H-pad.b}" stroke="var(--rule)" stroke-dasharray="2 3"/><text class="ev" x="${X(ex)+3}" y="${ei%2?pad.t-4:pad.t-15}">${t}</text>`;});
   if(m.zero&&lo<0&&hi>0)g+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ink-3)" stroke-width="1"/>`;
   if(m.floor)g+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${Y(m.floor.v)}" y2="${Y(m.floor.v)}" stroke="var(--bad)" stroke-width="1.2" stroke-dasharray="1 3" stroke-linecap="round"/>`;
-  const path=a=>{let d='',on=false;for(const i of idx){const v=a[i];if(v==null){on=false;continue;}d+=(on?'L':'M')+X(YEARS[i]).toFixed(1)+','+Y(v).toFixed(1);on=true;}return d;};
+  const path=a=>{let d='',on=false;for(const i of idx){const v=a[i];if(v==null){on=false;continue;}d+=(on?'L':'M')+X(XS[i]).toFixed(1)+','+Y(v).toFixed(1);on=true;}return d;};
   const sel=S.view;const excl=sel==='GROUP'?null:sel;
-  const med=YEARS.map((_,i)=>peer(m,i,excl).med);
-  if(sel!=='GROUP'){ // peer range band (excluding selected)
-    const pts=idx.map(i=>[YEARS[i],peer(m,i,sel)]).filter(p=>p[1].min!=null);
+  const med=P.keys.map((_,i)=>peer(m,i,excl).med);
+  const lw=Q?0.75:1; // thinner lines for the denser quarterly series
+  if(sel!=='GROUP'){
+    const pts=idx.map(i=>[XS[i],peer(m,i,sel)]).filter(p=>p[1].min!=null);
     if(pts.length>1)g+=`<path d="M${pts.map(p=>X(p[0])+','+Y(p[1].max)).join('L')}L${pts.slice().reverse().map(p=>X(p[0])+','+Y(p[1].min)).join('L')}Z" fill="var(--band)" stroke="none"/>`;
     for(const b of BANKS)if(b.id!==sel)g+=`<path d="${path(m.d[b.id])}" fill="none" stroke="var(--ink-3)" stroke-opacity=".35" stroke-width="1"/>`;
   }
-  g+=`<path d="${path(med)}" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="5 4"/>`;
-  if(sel==='GROUP'){for(const b of vis)g+=`<path d="${path(m.d[b.id])}" fill="none" stroke="${col(b.id)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;}
-  else{const a=m.d[sel];g+=`<path d="${path(a)}" fill="none" stroke="${col(sel)}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g+=`<path d="${path(med)}" fill="none" stroke="var(--ink)" stroke-width="${1.6*lw+0.2}" stroke-dasharray="5 4"/>`;
+  if(sel==='GROUP'){for(const b of vis)g+=`<path d="${path(m.d[b.id])}" fill="none" stroke="${col(b.id)}" stroke-width="${2*lw}" stroke-linejoin="round" stroke-linecap="round"/>`;}
+  else{const a=m.d[sel];g+=`<path d="${path(a)}" fill="none" stroke="${col(sel)}" stroke-width="${Q?2.2:2.6}" stroke-linejoin="round" stroke-linecap="round"/>`;
     const last=[...idx].reverse().find(i=>a[i]!=null);
     const lm=[...idx].reverse().find(i=>med[i]!=null);
-    let ys=[];if(last!=null){g+=`<circle cx="${X(YEARS[last])}" cy="${Y(a[last])}" r="4" fill="${col(sel)}" stroke="var(--panel)" stroke-width="2"/>`;ys.push(['s',Y(a[last]),sel+' '+fmt(m,a[last])]);}
+    let ys=[];if(last!=null){g+=`<circle cx="${X(XS[last])}" cy="${Y(a[last])}" r="4" fill="${col(sel)}" stroke="var(--panel)" stroke-width="2"/>`;ys.push(['s',Y(a[last]),sel+' '+fmt(m,a[last])]);}
     if(lm!=null)ys.push(['m',Y(med[lm]),'Peers '+fmt(m,med[lm])]);
     if(ys.length===2&&Math.abs(ys[0][1]-ys[1][1])<12){const mid=(ys[0][1]+ys[1][1])/2;const up=ys[0][1]<=ys[1][1]?0:1;ys[up][1]=mid-7;ys[1-up][1]=mid+7;}
     for(const [t,yy,txt] of ys)g+=`<text class="lab" x="${W-pad.r+6}" y="${yy+3.5}" style="fill:${t==='s'?'var(--ink)':'var(--ink-2)'}">${esc(txt)}</text>`;
@@ -342,7 +393,7 @@ function drawChart(k,svg){
   g+=`<line class="xh" x1="0" x2="0" y1="${pad.t}" y2="${H-pad.b}" stroke="var(--ink-2)" stroke-width="1" visibility="hidden"/><g class="dots"></g><rect x="${pad.l}" y="0" width="${W-pad.l-pad.r}" height="${H}" fill="transparent" class="hit"/>`;
   svg.innerHTML=g;
   const hit=svg.querySelector('.hit');
-  const pick=e=>{const r=svg.getBoundingClientRect();const px=(e.clientX-r.left)*(W/r.width);let best=idx[0],bd=1e9;for(const i of idx){const d=Math.abs(X(YEARS[i])-px);if(d<bd){bd=d;best=i;}}return best;};
+  const pick=e=>{const r=svg.getBoundingClientRect();const px=(e.clientX-r.left)*(W/r.width);let best=idx[0],bd=1e9;for(const i of idx){const d=Math.abs(X(XS[i])-px);if(d<bd){bd=d;best=i;}}return best;};
   hit.onpointermove=e=>{const i=pick(e);S.hover=i;syncHover();showTip(e,k,i);};
   hit.onpointerleave=()=>{S.hover=null;syncHover();$('#tip').style.display='none';};
   svg._X=X;svg._Y=Y;svg._idx=idx;
@@ -350,7 +401,7 @@ function drawChart(k,svg){
 function syncHover(){
   for(const {k,svg} of charts){const xh=svg.querySelector('.xh');const dots=svg.querySelector('.dots');if(!xh)continue;const i=S.hover;
     if(i==null||!svg._idx.includes(i)){xh.setAttribute('visibility','hidden');dots.innerHTML='';continue;}
-    const x=svg._X(YEARS[i]);xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');
+    const x=svg._X(P.x[i]);xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');
     const m=MET[k];const show=S.view==='GROUP'?BANKS.filter(b=>!S.hidden.has(b.id)).map(b=>b.id):[S.view];
     dots.innerHTML=show.map(b=>{const v=m.d[b][i];return v==null?'':`<circle cx="${x}" cy="${svg._Y(v)}" r="4" fill="${col(b)}" stroke="var(--panel)" stroke-width="2"/>`;}).join('');}
 }
@@ -358,27 +409,31 @@ function showTip(e,k,i){
   const m=MET[k];const t=$('#tip');const sel=S.view;
   const rows=BANKS.map(b=>[b.id,m.d[b.id][i]]).sort((a,b)=>(b[1]??-1e9)-(a[1]??-1e9));
   const p=peer(m,i,sel==='GROUP'?null:sel);
-  t.innerHTML=`<div class="y">FY${YEARS[i]} · ${esc(m.label)}</div>`+rows.map(([b,v])=>`<div class="r${b===sel?' sel':''}" style="${sel!=='GROUP'&&b!==sel?'opacity:.7':''}${S.view==='GROUP'&&S.hidden.has(b)?';opacity:.4':''}"><span><span class="sw" style="background:${col(b)}"></span>${b}</span><span>${fmt(m,v)}</span></div>`).join('')+`<div class="r" style="border-top:1px solid var(--rule);margin-top:4px;padding-top:4px"><span>${sel==='GROUP'?'Median':'Peer median (ex '+sel+')'}</span><span>${fmt(m,p.med)}</span></div>`;
+  t.innerHTML=`<div class="y">${P.lab[i]} · ${esc(m.label)}</div>`+rows.map(([b,v])=>`<div class="r${b===sel?' sel':''}" style="${sel!=='GROUP'&&b!==sel?'opacity:.7':''}"><span><span class="sw" style="background:${col(b)}"></span>${b}</span><span>${fmt(m,v)}</span></div>`).join('')+`<div class="r" style="border-top:1px solid var(--rule);margin-top:4px;padding-top:4px"><span>${sel==='GROUP'?'Median':'Peer median (ex '+sel+')'}</span><span>${fmt(m,p.med)}</span></div>`;
   t.style.display='block';const w=t.offsetWidth,h=t.offsetHeight;let x=e.clientX+14,y=e.clientY+14;if(x+w>innerWidth-8)x=e.clientX-w-14;if(y+h>innerHeight-8)y=e.clientY-h-14;t.style.left=Math.max(8,x)+'px';t.style.top=Math.max(8,y)+'px';
 }
 
 /* ---------- import / export ---------- */
-function exportCSV(){let s='metric,bank,year,value\n';for(const k in MET){if(DERIVED[k])continue;for(const b of BANKS)MET[k].d[b.id].forEach((v,i)=>{if(v!=null)s+=`${k},${b.id},${YEARS[i]},${v}\n`;});}$('#csvOut').value=s;}
+function exportCSV(){let s='metric,bank,period,value\n';for(const k in MET){if(DERIVED[k])continue;for(const b of BANKS)MET[k].d[b.id].forEach((v,i)=>{if(v!=null)s+=`${k},${b.id},${P.keys[i]},${v}\n`;});}$('#csvOut').value=s;$('#expLbl').textContent=S.freq==='A'?'annual':'quarterly';}
 function parseCSV(txt){
   const out={};let n=0,bad=0;
+  const all=new Set([...PER.A.keys,...PER.Q.keys]);
   for(const line of txt.split(/\r?\n/)){const c=line.split(/[,\t;]/).map(x=>x.trim().replace(/^"|"$/g,''));if(c.length<4||/^metric$/i.test(c[0]))continue;
-    const [k,b,y,v]=c;const bank=b.toUpperCase();const yr=parseInt(String(y).replace(/^FY/i,''),10);const val=parseFloat(v);
-    if(!k||!BANKS.some(x=>x.id===bank)||!YEARS.includes(yr)||isNaN(val)||DERIVED[k]){bad++;continue;}
-    ((out[k]=out[k]||{})[bank]=out[k][bank]||{})[yr]=val;n++;}
+    const [k,b,y,v]=c;const bank=b.toUpperCase();const val=parseFloat(v);
+    let pk=String(y).toUpperCase().replace(/^FY/,'').replace(/\s+/g,'');
+    let mq=pk.match(/^(\d{4})Q([1-4])$/)||pk.match(/^Q([1-4])(?:FY)?(\d{4})$/);
+    if(mq)pk=mq[1].length===4?`${mq[1]}Q${mq[2]}`:`${mq[2]}Q${mq[1]}`;
+    if(!k||!BANKS.some(x=>x.id===bank)||!all.has(pk)||isNaN(val)||DERIVED[k]){bad++;continue;}
+    ((out[k]=out[k]||{})[bank]=out[k][bank]||{})[pk]=val;n++;}
   return {out,n,bad};
 }
 function bindData(){
-  $('#keyList').innerHTML=Object.keys(BASE).map(k=>`<code>${k}</code>`).join(' ');
+  $('#keyList').innerHTML=Object.keys(BASES.A).map(k=>`<code>${k}</code>`).join(' ');
   $('#btnImport').onclick=()=>{const {out,n,bad}=parseCSV($('#csvIn').value);
     for(const k in out)for(const b in out[k])Object.assign(((imported[k]=imported[k]||{})[b]=imported[k][b]||{}),out[k][b]);
-    store.set('camels.imported',JSON.stringify(imported));MET=metrics();render();
-    $('#impMsg').textContent=`Applied ${n} value${n===1?'':'s'}`+(bad?`. Skipped ${bad} row${bad===1?'':'s'}: check the bank code, the year (2009 to 2025) and the number.`:'.');};
-  $('#btnClear').onclick=()=>{imported={};store.set('camels.imported','{}');MET=metrics();render();$('#impMsg').textContent='Imported data cleared. Built-in values restored.';};
+    store.set('camels.imported',JSON.stringify(imported));MET=metrics(S.freq);render();
+    $('#impMsg').textContent=`Applied ${n} value${n===1?'':'s'}`+(bad?`. Skipped ${bad} row${bad===1?'':'s'}: check the bank code, the period (2025 or 2025Q3) and the number.`:'.');};
+  $('#btnClear').onclick=()=>{imported={};store.set('camels.imported','{}');MET=metrics(S.freq);render();$('#impMsg').textContent='Imported data cleared. OSFI values restored.';};
   $('#fileIn').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('#csvIn').value=r.result;$('#impMsg').textContent=`Loaded ${f.name}. Press Apply import.`;};r.readAsText(f);};
   $('#btnCopy').onclick=()=>{const ta=$('#csvOut');const ok=()=>$('#cpMsg').textContent='Copied.';
     try{navigator.clipboard.writeText(ta.value).then(ok,()=>{ta.select();$('#cpMsg').textContent='Text selected. Press Ctrl+C to copy.';});}catch(e){ta.select();$('#cpMsg').textContent='Text selected. Press Ctrl+C to copy.';}};
